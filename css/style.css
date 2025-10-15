@@ -371,6 +371,49 @@ small {
     background-color: #f9f9f9;
 }
 
+/* أنماط جديدة لقطعة الاستيعاب */
+.reading-passage {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border-right: 4px solid var(--primary);
+}
+
+.reading-passage h4 {
+    color: var(--primary);
+    margin-bottom: 10px;
+}
+
+.passage-content {
+    line-height: 1.8;
+    font-size: 1.1rem;
+    color: #555;
+}
+
+.correct-answer {
+    color: var(--success);
+    font-weight: bold;
+}
+
+.correct-text {
+    color: var(--success);
+    font-weight: bold;
+}
+
+.incorrect-text {
+    color: var(--danger);
+    font-weight: bold;
+}
+
+.navigation-buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+}
+
 @media (max-width: 768px) {
     .header-content {
         flex-direction: column;
@@ -435,5 +478,14 @@ small {
     #students-report th:first-child,
     #students-report td:first-child {
         width: 40px;
+    }
+    
+    .navigation-buttons {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .navigation-buttons button {
+        width: 100%;
     }
 }
