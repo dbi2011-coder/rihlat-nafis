@@ -1,7 +1,7 @@
 // نظام المصادقة وإدارة الجلسات
 
 function loginAdmin(username, password) {
-    if (username === 'admin' && password === 'admin123') {
+    if (username === 'عاصم البيشي' && password === '0509894176') {
         localStorage.setItem('adminLoggedIn', 'true');
         localStorage.setItem('adminLoginTime', new Date().toISOString());
         return true;
