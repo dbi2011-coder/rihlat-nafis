@@ -371,121 +371,18 @@ small {
     background-color: #f9f9f9;
 }
 
-/* أنماط جديدة لقطعة الاستيعاب */
-.reading-passage {
-    margin: 20px 0;
-    padding: 15px;
-    background-color: #f8f9fa;
+/* أنماط جديدة لأسئلة الاستيعاب */
+.reading-question-container {
+    border: 1px solid #ddd;
     border-radius: 8px;
-    border-right: 4px solid var(--primary);
+    padding: 15px;
+    margin-bottom: 15px;
+    background-color: #f8f9fa;
 }
 
-.reading-passage h4 {
-    color: var(--primary);
-    margin-bottom: 10px;
-}
-
-.passage-content {
-    line-height: 1.8;
-    font-size: 1.1rem;
-    color: #555;
-}
-
-.correct-answer {
-    color: var(--success);
-    font-weight: bold;
-}
-
-.correct-text {
-    color: var(--success);
-    font-weight: bold;
-}
-
-.incorrect-text {
-    color: var(--danger);
-    font-weight: bold;
-}
-
-.navigation-buttons {
+.reading-question-header {
     display: flex;
     justify-content: space-between;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #ddd;
-}
-
-@media (max-width: 768px) {
-    .header-content {
-        flex-direction: column;
-        text-align: center;
-        gap: 1rem;
-    }
-    
-    .logo {
-        margin-left: 0;
-        margin-bottom: 10px;
-    }
-    
-    .tabs {
-        flex-direction: column;
-    }
-    
-    .tab-btn {
-        text-align: right;
-        border-bottom: 1px solid #ddd;
-        border-left: 3px solid transparent;
-    }
-    
-    .tab-btn.active {
-        border-left-color: var(--primary);
-        border-bottom-color: #ddd;
-    }
-    
-    .access-buttons {
-        flex-direction: column;
-        align-items: center;
-    }
-    
-    .access-buttons button {
-        width: 200px;
-    }
-    
-    .admin-info {
-        justify-content: center;
-        flex-direction: column;
-        gap: 10px;
-    }
-    
-    .title-container h1 {
-        font-size: 1.4rem;
-    }
-    
-    .subtitle {
-        font-size: 0.9rem;
-    }
-    
-    footer.credits {
-        font-size: 0.8rem;
-        padding: 15px;
-    }
-    
-    .btn-small {
-        display: block;
-        width: 100%;
-        margin: 5px 0;
-    }
-    
-    #students-report th:first-child,
-    #students-report td:first-child {
-        width: 40px;
-    }
-    
-    .navigation-buttons {
-        flex-direction: column;
-        gap: 10px;
-    }
-    
-    .navigation-buttons button {
-        width: 100%;
-    }
+    align-items: center;
+    margin-bottom: 15px;
 }
