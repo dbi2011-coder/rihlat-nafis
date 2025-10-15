@@ -54,12 +54,19 @@
                     <textarea id="reading-passage" rows="5" placeholder="أدخل نص القطعة هنا..."></textarea>
                 </div>
                 
+                <!-- أسئلة استيعاب المقروء -->
+                <div id="reading-questions-container" style="display: none;">
+                    <h3>أسئلة القطعة</h3>
+                    <div id="reading-questions-list"></div>
+                    <button type="button" id="add-reading-question" class="btn-primary">إضافة سؤال للقطعة</button>
+                </div>
+                
                 <div class="form-group" id="media-url-group" style="display: none;">
                     <label for="media-url">رابط اليوتيوب أو الصورة</label>
                     <input type="url" id="media-url" placeholder="https://example.com/video.jpg أو https://youtube.com/watch?v=...">
                 </div>
                 
-                <div class="form-group">
+                <div class="form-group" id="standard-options-group">
                     <label>عدد الخيارات</label>
                     <select id="options-count">
                         <option value="2">2</option>
@@ -72,7 +79,7 @@
                 
                 <div id="options-container"></div>
                 
-                <div class="form-group">
+                <div class="form-group" id="correct-answer-group">
                     <label>الإجابة الصحيحة</label>
                     <div id="correct-answer-container"></div>
                 </div>
