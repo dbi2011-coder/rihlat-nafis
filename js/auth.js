@@ -4,7 +4,7 @@ function isAdminLoggedIn() {
 }
 
 function loginAdmin(username, password) {
-    if (username === 'admin' && password === 'admin123') {
+    if (username === 'عاصم البيشي' && password === '123') {
         localStorage.setItem('adminLoggedIn', 'true');
         return true;
     }
@@ -14,3 +14,4 @@ function loginAdmin(username, password) {
 function logoutAdmin() {
     localStorage.removeItem('adminLoggedIn');
 }
+
