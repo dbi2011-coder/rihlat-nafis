@@ -34,7 +34,8 @@
         <div id="questions" class="tab-content active">
             <h2>إضافة سؤال جديد</h2>
             <form id="add-question-form">
-                <div class="form-group">
+                <!-- قسم نص السؤال - سيتم إخفاؤه عند اختيار استيعاب المقروء -->
+                <div class="form-group" id="standard-question-group">
                     <label for="question-text">نص السؤال</label>
                     <textarea id="question-text" rows="3" required></textarea>
                 </div>
@@ -51,7 +52,7 @@
                 <!-- قطعة استيعاب المقروء -->
                 <div class="form-group" id="reading-passage-group" style="display: none;">
                     <label for="reading-passage">قطعة الاستيعاب</label>
-                    <textarea id="reading-passage" rows="5" placeholder="أدخل نص القطعة هنا..."></textarea>
+                    <textarea id="reading-passage" rows="5" placeholder="أدخل نص القطعة هنا..." required></textarea>
                 </div>
                 
                 <!-- أسئلة استيعاب المقروء -->
