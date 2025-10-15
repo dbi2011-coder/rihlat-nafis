@@ -34,16 +34,14 @@ function setupEventListeners() {
         const mediaGroup = document.getElementById('media-url-group');
         const readingGroup = document.getElementById('reading-passage-group');
         const readingQuestionsContainer = document.getElementById('reading-questions-container');
-        const standardOptionsGroup = document.getElementById('standard-options-group');
-        const correctAnswerGroup = document.getElementById('correct-answer-group');
+        const standardOptionsSection = document.getElementById('standard-options-section');
         const standardQuestionGroup = document.getElementById('standard-question-group');
         
         // إظهار/إخفاء العناصر حسب نوع السؤال
         mediaGroup.style.display = type === 'multiple-with-media' ? 'block' : 'none';
         readingGroup.style.display = type === 'reading-comprehension' ? 'block' : 'none';
         readingQuestionsContainer.style.display = type === 'reading-comprehension' ? 'block' : 'none';
-        standardOptionsGroup.style.display = type === 'reading-comprehension' ? 'none' : 'block';
-        correctAnswerGroup.style.display = type === 'reading-comprehension' ? 'none' : 'block';
+        standardOptionsSection.style.display = type === 'reading-comprehension' ? 'none' : 'block';
         standardQuestionGroup.style.display = type === 'reading-comprehension' ? 'none' : 'block';
         
         if (type === 'reading-comprehension') {
@@ -320,8 +318,7 @@ function addQuestion(e) {
     document.getElementById('media-url-group').style.display = 'none';
     document.getElementById('reading-passage-group').style.display = 'none';
     document.getElementById('reading-questions-container').style.display = 'none';
-    document.getElementById('standard-options-group').style.display = 'block';
-    document.getElementById('correct-answer-group').style.display = 'block';
+    document.getElementById('standard-options-section').style.display = 'block';
     document.getElementById('standard-question-group').style.display = 'block';
     updateOptionsContainer();
     loadReadingQuestions();
