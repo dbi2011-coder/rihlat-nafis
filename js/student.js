@@ -90,9 +90,30 @@ function loadQuestionsForTest() {
         return;
     }
     
+    // تحويل أسئلة الاستيعاب إلى أسئلة فردية
+    const flattenedQuestions = [];
+    allQuestions.forEach(question => {
+        if (question.type === 'reading-comprehension' && question.passageQuestions) {
+            // إضافة كل سؤال من أسئلة القطعة كسؤال منفصل
+            question.passageQuestions.forEach(passageQ => {
+                flattenedQuestions.push({
+                    id: passageQ.id,
+                    text: passageQ.text,
+                    type: 'reading-comprehension-item',
+                    options: passageQ.options,
+                    correctAnswer: passageQ.correctAnswer,
+                    readingPassage: question.readingPassage,
+                    parentQuestionId: question.id
+                });
+            });
+        } else {
+            flattenedQuestions.push(question);
+        }
+    });
+    
     // اختيار عدد عشوائي من الأسئلة
-    const questionsCount = Math.min(settings.questionsCount, allQuestions.length);
-    questions = getRandomQuestions(allQuestions, questionsCount);
+    const questionsCount = Math.min(settings.questionsCount, flattenedQuestions.length);
+    questions = getRandomQuestions(flattenedQuestions, questionsCount);
     
     // تهيئة الإجابات
     studentAnswers = new Array(questions.length).fill(null);
@@ -114,18 +135,21 @@ function displayCurrentQuestion() {
     
     let questionHTML = `
         <h3>السؤال ${currentQuestionIndex + 1} من ${questions.length}</h3>
-        <p class="question-text">${question.text}</p>
     `;
     
-    // إضافة قطعة الاستيعاب إذا كان النوع استيعاب مقروء
-    if (question.type === 'reading-comprehension' && question.readingPassage) {
+    // إضافة قطعة الاستيعاب إذا كان السؤال من نوع استيعاب مقروء
+    if (question.type === 'reading-comprehension-item' && question.readingPassage) {
         questionHTML += `
             <div class="reading-passage">
-                <h4>قطعة الاستيعاب:</h4>
+                <h4>اقرأ القطعة التالية ثم أجب عن السؤال:</h4>
                 <div class="passage-content">${question.readingPassage}</div>
             </div>
         `;
     }
+    
+    questionHTML += `
+        <p class="question-text">${question.text}</p>
+    `;
     
     // إضافة المرفق إذا كان النوع يحتوي على مرفق
     if (question.type === 'multiple-with-media' && question.mediaUrl) {
@@ -274,8 +298,13 @@ function showResults(score, percentage, timeTaken) {
                     return `
                         <div class="question-feedback ${isCorrect ? 'correct' : 'incorrect'}">
                             <h4>السؤال ${index + 1}</h4>
+                            ${question.readingPassage ? `
+                                <div class="reading-passage">
+                                    <strong>قطعة الاستيعاب:</strong>
+                                    <div class="passage-content">${question.readingPassage}</div>
+                                </div>
+                            ` : ''}
                             <p><strong>النص:</strong> ${question.text}</p>
-                            ${question.readingPassage ? `<p><strong>قطعة الاستيعاب:</strong> ${question.readingPassage}</p>` : ''}
                             <p><strong>إجابتك:</strong> ${studentAnswer ? question.options[studentAnswer - 1] : 'لم تجب'}</p>
                             <p><strong>الإجابة الصحيحة:</strong> ${question.options[question.correctAnswer - 1]}</p>
                             <p class="result ${isCorrect ? 'correct-text' : 'incorrect-text'}">
