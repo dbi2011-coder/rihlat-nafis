@@ -1,4 +1,4 @@
-// الدوال العامة والمشتركة بين الصفحات
+// الدوال العامة والمشتركة بين الصفحات مع دعم Supabase
 
 // دالة لتحميل البيانات من localStorage
 function loadFromStorage(key, defaultValue = null) {
@@ -158,8 +158,181 @@ function isLocalStorageSupported() {
     }
 }
 
-// تهيئة التطبيق
-function initializeApp() {
+// دالة للتحقق من اتصال Supabase
+async function checkSupabaseConnection() {
+    try {
+        const { data, error } = await supabaseClient.from('questions').select('*').limit(1);
+        return !error;
+    } catch (error) {
+        console.error('Supabase connection error:', error);
+        return false;
+    }
+}
+
+// دالة لمزامنة البيانات من localStorage إلى Supabase
+async function syncLocalStorageToSupabase() {
+    const isConnected = await checkSupabaseConnection();
+    if (!isConnected) {
+        console.log('⚠️ No Supabase connection, skipping sync');
+        return;
+    }
+
+    console.log('🔄 Starting data sync to Supabase...');
+
+    // مزامنة الأسئلة
+    const localQuestions = JSON.parse(localStorage.getItem('questions')) || [];
+    if (localQuestions.length > 0) {
+        try {
+            console.log(`📚 Syncing ${localQuestions.length} questions...`);
+            
+            // حذف الأسئلة القديمة أولاً
+            const { error: deleteError } = await supabaseClient
+                .from('questions')
+                .delete()
+                .neq('id', 0);
+            
+            if (deleteError) throw deleteError;
+            
+            // إضافة الأسئلة الجديدة
+            const { error: insertError } = await supabaseClient
+                .from('questions')
+                .insert(localQuestions);
+            
+            if (insertError) throw insertError;
+            
+            localStorage.removeItem('questions');
+            console.log('✅ Questions synced successfully');
+        } catch (error) {
+            console.error('❌ Error syncing questions:', error);
+        }
+    }
+
+    // مزامنة الطلاب
+    const localStudents = JSON.parse(localStorage.getItem('students')) || [];
+    if (localStudents.length > 0) {
+        try {
+            console.log(`👥 Syncing ${localStudents.length} students...`);
+            
+            const { error: deleteError } = await supabaseClient
+                .from('students')
+                .delete()
+                .neq('id', 0);
+            
+            if (deleteError) throw deleteError;
+            
+            const { error: insertError } = await supabaseClient
+                .from('students')
+                .insert(localStudents);
+            
+            if (insertError) throw insertError;
+            
+            localStorage.removeItem('students');
+            console.log('✅ Students synced successfully');
+        } catch (error) {
+            console.error('❌ Error syncing students:', error);
+        }
+    }
+
+    // مزامنة الطلاب المصرح لهم
+    const localAuthorized = JSON.parse(localStorage.getItem('authorizedStudents')) || [];
+    if (localAuthorized.length > 0) {
+        try {
+            console.log(`🔐 Syncing ${localAuthorized.length} authorized students...`);
+            
+            const { error: deleteError } = await supabaseClient
+                .from('authorized_students')
+                .delete()
+                .neq('id', '');
+            
+            if (deleteError) throw deleteError;
+            
+            const { error: insertError } = await supabaseClient
+                .from('authorized_students')
+                .insert(localAuthorized);
+            
+            if (insertError) throw insertError;
+            
+            localStorage.removeItem('authorizedStudents');
+            console.log('✅ Authorized students synced successfully');
+        } catch (error) {
+            console.error('❌ Error syncing authorized students:', error);
+        }
+    }
+
+    // مزامنة الإعدادات
+    const localSettings = JSON.parse(localStorage.getItem('settings'));
+    if (localSettings) {
+        try {
+            console.log('⚙️ Syncing settings...');
+            
+            const { error } = await supabaseClient
+                .from('settings')
+                .upsert(localSettings);
+            
+            if (error) throw error;
+            
+            localStorage.removeItem('settings');
+            console.log('✅ Settings synced successfully');
+        } catch (error) {
+            console.error('❌ Error syncing settings:', error);
+        }
+    }
+
+    console.log('🎉 Data sync completed');
+}
+
+// دالة لتحميل البيانات من Supabase مع fallback لـ localStorage
+async function loadDataWithFallback(tableName, localStorageKey) {
+    try {
+        const { data, error } = await supabaseClient
+            .from(tableName)
+            .select('*');
+        
+        if (error) throw error;
+        
+        return data || [];
+    } catch (error) {
+        console.error(`Error loading ${tableName} from Supabase:`, error);
+        return JSON.parse(localStorage.getItem(localStorageKey)) || [];
+    }
+}
+
+// دالة لحفظ البيانات في Supabase مع fallback لـ localStorage
+async function saveDataWithFallback(tableName, localStorageKey, data, isArray = true) {
+    try {
+        if (isArray && data.length > 0) {
+            // حذف القديم وإضافة الجديد للمصفوفات
+            const { error: deleteError } = await supabaseClient
+                .from(tableName)
+                .delete()
+                .neq('id', 0);
+            
+            if (deleteError) throw deleteError;
+            
+            const { error: insertError } = await supabaseClient
+                .from(tableName)
+                .insert(data);
+            
+            if (insertError) throw insertError;
+        } else if (!isArray) {
+            // تحديث للسجل المفرد
+            const { error } = await supabaseClient
+                .from(tableName)
+                .upsert(data);
+            
+            if (error) throw error;
+        }
+        
+        return true;
+    } catch (error) {
+        console.error(`Error saving to Supabase, using localStorage for ${tableName}:`, error);
+        localStorage.setItem(localStorageKey, JSON.stringify(data));
+        return false;
+    }
+}
+
+// دالة لتهيئة التطبيق
+async function initializeApp() {
     if (!isLocalStorageSupported()) {
         alert('المتصفح لا يدعم التخزين المحلي. قد لا تعمل بعض الميزات بشكل صحيح.');
         return false;
@@ -167,6 +340,16 @@ function initializeApp() {
     
     // تنظيف الجلسات المنتهية
     cleanupExpiredSessions();
+    
+    // التحقق من اتصال Supabase
+    const isConnected = await checkSupabaseConnection();
+    if (isConnected) {
+        console.log('✅ Connected to Supabase');
+        showAlert('تم الاتصال بنجاح مع قاعدة البيانات السحابية', 'success');
+    } else {
+        console.log('⚠️ Using localStorage as primary storage');
+        showAlert('جاري استخدام التخزين المحلي', 'warning');
+    }
     
     return true;
 }
@@ -186,7 +369,149 @@ function cleanupExpiredSessions() {
     }
 }
 
+// دالة لتحميل صورة وتحويلها إلى base64
+function imageToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+}
+
+// دالة للتحقق من حجم الملف
+function checkFileSize(file, maxSizeMB = 5) {
+    const maxSize = maxSizeMB * 1024 * 1024; // تحويل إلى bytes
+    return file.size <= maxSize;
+}
+
+// دالة لعرض تأكيد مخصص
+function showConfirmation(message, confirmText = 'نعم', cancelText = 'لا') {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        `;
+        
+        modal.innerHTML = `
+            <div style="background: white; padding: 20px; border-radius: 8px; text-align: center; max-width: 400px;">
+                <p style="margin-bottom: 20px; font-size: 16px;">${message}</p>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button id="confirm-btn" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">${confirmText}</button>
+                    <button id="cancel-btn" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">${cancelText}</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        document.getElementById('confirm-btn').addEventListener('click', () => {
+            document.body.removeChild(modal);
+            resolve(true);
+        });
+        
+        document.getElementById('cancel-btn').addEventListener('click', () => {
+            document.body.removeChild(modal);
+            resolve(false);
+        });
+    });
+}
+
+// دالة لتنسيق الأرقام العربية
+function formatArabicNumber(number) {
+    return new Intl.NumberFormat('ar-SA').format(number);
+}
+
+// دالة للحصول على التاريخ والوقت الحالي
+function getCurrentDateTime() {
+    const now = new Date();
+    return {
+        date: now.toLocaleDateString('ar-SA'),
+        time: now.toLocaleTimeString('ar-SA'),
+        timestamp: now.getTime()
+    };
+}
+
+// دالة لإضافة تأثيرات بصرية
+function addVisualEffect(element, effect = 'pulse') {
+    element.style.transition = 'all 0.3s ease';
+    
+    switch (effect) {
+        case 'pulse':
+            element.style.transform = 'scale(1.05)';
+            setTimeout(() => {
+                element.style.transform = 'scale(1)';
+            }, 300);
+            break;
+        case 'shake':
+            element.style.animation = 'shake 0.5s';
+            setTimeout(() => {
+                element.style.animation = '';
+            }, 500);
+            break;
+        case 'highlight':
+            const originalColor = element.style.backgroundColor;
+            element.style.backgroundColor = '#ffffcc';
+            setTimeout(() => {
+                element.style.backgroundColor = originalColor;
+            }, 1000);
+            break;
+    }
+}
+
+// إضافة أنيميشن الاهتزاز
+if (!document.querySelector('#animation-styles')) {
+    const style = document.createElement('style');
+    style.id = 'animation-styles';
+    style.textContent = `
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 // تشغيل التهيئة عند تحميل الصفحة
 document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
+    
+    // محاولة المزامنة إذا كان هناك اتصال
+    setTimeout(() => {
+        syncLocalStorageToSupabase();
+    }, 2000);
 });
+
+// جعل الدوال متاحة globally للاستخدام في الملفات الأخرى
+window.loadFromStorage = loadFromStorage;
+window.saveToStorage = saveToStorage;
+window.showAlert = showAlert;
+window.formatTime = formatTime;
+window.isValidYouTubeUrl = isValidYouTubeUrl;
+window.isValidImageUrl = isValidImageUrl;
+window.generateId = generateId;
+window.sanitizeInput = sanitizeInput;
+window.checkInternetConnection = checkInternetConnection;
+window.showLoading = showLoading;
+window.hideLoading = hideLoading;
+window.isLocalStorageSupported = isLocalStorageSupported;
+window.checkSupabaseConnection = checkSupabaseConnection;
+window.syncLocalStorageToSupabase = syncLocalStorageToSupabase;
+window.loadDataWithFallback = loadDataWithFallback;
+window.saveDataWithFallback = saveDataWithFallback;
+window.imageToBase64 = imageToBase64;
+window.checkFileSize = checkFileSize;
+window.showConfirmation = showConfirmation;
+window.formatArabicNumber = formatArabicNumber;
+window.getCurrentDateTime = getCurrentDateTime;
+window.addVisualEffect = addVisualEffect;
