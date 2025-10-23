@@ -210,6 +210,7 @@ function loadReadingQuestions() {
 
 async function addQuestion(e) {
     e.preventDefault();
+    console.log('بدء إضافة سؤال جديد...');
     
     const questionText = document.getElementById('question-text').value;
     const questionType = document.getElementById('question-type').value;
@@ -232,7 +233,7 @@ async function addQuestion(e) {
         
         const passageQuestions = [];
         
-        readingQuestionElements.forEach(questionDiv => {
+        for (const questionDiv of readingQuestionElements) {
             const questionId = questionDiv.getAttribute('data-id');
             const questionText = questionDiv.querySelector('.reading-question-text').value;
             const optionsCount = parseInt(questionDiv.querySelector('.reading-options-count').value);
@@ -251,7 +252,7 @@ async function addQuestion(e) {
             const options = [];
             for (let i = 1; i <= optionsCount; i++) {
                 const optionInput = questionDiv.querySelector(`.reading-option-input[data-option="${i}"]`);
-                if (!optionInput.value.trim()) {
+                if (!optionInput || !optionInput.value.trim()) {
                     alert(`يرجى إدخال نص جميع الخيارات`);
                     return;
                 }
@@ -259,19 +260,20 @@ async function addQuestion(e) {
             }
             
             passageQuestions.push({
-                id: questionId,
+                id: parseInt(questionId),
                 text: questionText,
                 options: options,
                 correctAnswer: parseInt(correctAnswer.value)
             });
-        });
+        }
         
         question = {
             id: Date.now(),
             text: questionText,
             type: questionType,
-            readingPassage: readingPassage,
-            passageQuestions: passageQuestions
+            reading_passage: readingPassage,
+            passage_questions: passageQuestions,
+            created_at: new Date().toISOString()
         };
         
     } else {
@@ -286,7 +288,7 @@ async function addQuestion(e) {
         const options = [];
         for (let i = 1; i <= optionsCount; i++) {
             const optionInput = document.querySelector(`.option-input[data-option="${i}"]`);
-            if (optionInput.value.trim() === '') {
+            if (!optionInput || optionInput.value.trim() === '') {
                 alert(`يرجى إدخال نص الخيار ${i}`);
                 return;
             }
@@ -298,41 +300,75 @@ async function addQuestion(e) {
             text: questionText,
             type: questionType,
             options: options,
-            correctAnswer: parseInt(correctAnswer.value),
-            mediaUrl: questionType === 'multiple-with-media' ? document.getElementById('media-url').value : null
+            correct_answer: parseInt(correctAnswer.value),
+            media_url: questionType === 'multiple-with-media' ? document.getElementById('media-url').value : null,
+            created_at: new Date().toISOString()
         };
     }
     
-    questions.push(question);
-    await saveQuestions();
-    await loadQuestions();
+    console.log('السؤال المُعد:', question);
     
-    document.getElementById('add-question-form').reset();
-    document.getElementById('media-url-group').style.display = 'none';
-    document.getElementById('reading-passage-group').style.display = 'none';
-    document.getElementById('reading-questions-container').style.display = 'none';
-    document.getElementById('standard-options-section').style.display = 'block';
-    document.getElementById('standard-question-group').style.display = 'block';
-    updateOptionsContainer();
-    loadReadingQuestions();
-    
-    alert('تم إضافة السؤال بنجاح');
+    try {
+        // إضافة السؤال إلى المصفوفة المحلية
+        questions.push(question);
+        
+        // حفظ في Supabase
+        const { data, error } = await supabaseClient
+            .from('questions')
+            .insert([question]);
+        
+        if (error) {
+            console.error('خطأ في حفظ السؤال في Supabase:', error);
+            throw error;
+        }
+        
+        console.log('✅ تم حفظ السؤال في Supabase:', data);
+        
+        // تحديث الواجهة
+        await loadQuestions();
+        
+        // إعادة تعيين النموذج
+        document.getElementById('add-question-form').reset();
+        document.getElementById('media-url-group').style.display = 'none';
+        document.getElementById('reading-passage-group').style.display = 'none';
+        document.getElementById('reading-questions-container').style.display = 'none';
+        document.getElementById('standard-options-section').style.display = 'block';
+        document.getElementById('standard-question-group').style.display = 'block';
+        
+        updateOptionsContainer();
+        loadReadingQuestions();
+        
+        alert('تم إضافة السؤال بنجاح! ✅');
+        
+    } catch (error) {
+        console.error('❌ خطأ في إضافة السؤال:', error);
+        saveToStorage('questions', questions);
+        alert('تم إضافة السؤال محلياً (بدون اتصال بالسحابة)');
+        displayQuestions();
+    }
 }
 
 async function loadQuestions() {
+    console.log('جاري تحميل الأسئلة...');
+    
     try {
         const { data, error } = await supabaseClient
             .from('questions')
             .select('*')
             .order('created_at', { ascending: false });
         
-        if (error) throw error;
+        if (error) {
+            console.error('خطأ في تحميل الأسئلة من Supabase:', error);
+            throw error;
+        }
         
         questions = data || [];
+        console.log(`✅ تم تحميل ${questions.length} سؤال من Supabase`);
         
     } catch (error) {
-        console.error('Error loading questions from Supabase:', error);
-        questions = JSON.parse(localStorage.getItem('questions')) || [];
+        console.error('❌ خطأ في تحميل الأسئلة من Supabase:', error);
+        questions = loadFromStorage('questions', []);
+        console.log(`💾 تم تحميل ${questions.length} سؤال من localStorage`);
     }
     
     displayQuestions();
@@ -343,25 +379,34 @@ function displayQuestions() {
     container.innerHTML = '';
     
     if (questions.length === 0) {
-        container.innerHTML = '<p>لا توجد أسئلة مضافة بعد</p>';
+        container.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">لا توجد أسئلة مضافة بعد</p>';
         return;
     }
+    
+    console.log(`عرض ${questions.length} سؤال في الواجهة`);
     
     questions.forEach((question, index) => {
         const questionDiv = document.createElement('div');
         questionDiv.className = 'question-container';
+        questionDiv.style.border = '1px solid #ddd';
+        questionDiv.style.borderRadius = '8px';
+        questionDiv.style.padding = '15px';
+        questionDiv.style.marginBottom = '15px';
+        questionDiv.style.backgroundColor = '#f9f9f9';
         
         let questionHTML = `
-            <h4>السؤال ${index + 1} - ${getQuestionTypeText(question.type)}</h4>
+            <h4 style="color: #2c3e50; margin-bottom: 10px;">
+                السؤال ${index + 1} - ${getQuestionTypeText(question.type)}
+            </h4>
         `;
         
         if (question.type === 'reading-comprehension') {
             questionHTML += `
-                <p><strong>قطعة الاستيعاب:</strong> ${question.readingPassage.substring(0, 100)}...</p>
-                <p><strong>عدد الأسئلة:</strong> ${question.passageQuestions.length}</p>
-                <div class="passage-questions">
-                    ${question.passageQuestions.map((q, qIndex) => `
-                        <div class="passage-question">
+                <p><strong>قطعة الاستيعاب:</strong> ${(question.reading_passage || '').substring(0, 100)}...</p>
+                <p><strong>عدد الأسئلة:</strong> ${(question.passage_questions || []).length}</p>
+                <div class="passage-questions" style="margin-top: 10px;">
+                    ${(question.passage_questions || []).map((q, qIndex) => `
+                        <div class="passage-question" style="padding: 8px; border-bottom: 1px solid #eee;">
                             <strong>سؤال ${qIndex + 1}:</strong> ${q.text}
                             <br><strong>الإجابة الصحيحة:</strong> ${q.options[q.correctAnswer - 1]}
                         </div>
@@ -371,12 +416,12 @@ function displayQuestions() {
         } else {
             questionHTML += `
                 <p><strong>النص:</strong> ${question.text}</p>
-                ${question.mediaUrl ? `<p><strong>المرفق:</strong> ${question.mediaUrl}</p>` : ''}
+                ${question.media_url ? `<p><strong>المرفق:</strong> ${question.media_url}</p>` : ''}
                 <p><strong>الخيارات:</strong></p>
-                <ul>
-                    ${question.options.map((option, i) => `
-                        <li class="${i + 1 === question.correctAnswer ? 'correct-answer' : ''}">
-                            ${option} ${i + 1 === question.correctAnswer ? '✓' : ''}
+                <ul style="list-style: none; padding-right: 0;">
+                    ${(question.options || []).map((option, i) => `
+                        <li style="padding: 5px 0; ${i + 1 === question.correct_answer ? 'color: #27ae60; font-weight: bold;' : 'color: #7f8c8d;'}">
+                            ${option} ${i + 1 === question.correct_answer ? '✓' : ''}
                         </li>
                     `).join('')}
                 </ul>
@@ -384,7 +429,10 @@ function displayQuestions() {
         }
         
         questionHTML += `
-            <button class="btn-danger btn-small" onclick="deleteQuestion(${question.id})">حذف</button>
+            <button class="btn-danger btn-small" onclick="deleteQuestion(${question.id})" 
+                    style="margin-top: 10px; padding: 5px 10px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                حذف
+            </button>
         `;
         
         questionDiv.innerHTML = questionHTML;
@@ -423,25 +471,31 @@ async function deleteQuestion(id) {
 
 async function saveQuestions() {
     try {
-        // حذف جميع الأسئلة القديمة وإضافة الجديدة
-        const { error: deleteError } = await supabaseClient
-            .from('questions')
-            .delete()
-            .neq('id', 0);
+        console.log('جاري حفظ الأسئلة في Supabase...');
         
-        if (deleteError) throw deleteError;
-        
-        if (questions.length > 0) {
-            const { error: insertError } = await supabaseClient
-                .from('questions')
-                .insert(questions);
-            
-            if (insertError) throw insertError;
+        if (questions.length === 0) {
+            console.log('لا توجد أسئلة للحفظ');
+            return;
         }
         
+        const { data, error } = await supabaseClient
+            .from('questions')
+            .upsert(questions, { 
+                onConflict: 'id',
+                ignoreDuplicates: false 
+            });
+        
+        if (error) {
+            console.error('خطأ في حفظ الأسئلة في Supabase:', error);
+            throw error;
+        }
+        
+        console.log('✅ تم حفظ جميع الأسئلة في Supabase');
+        
     } catch (error) {
-        console.error('Error saving to Supabase, using localStorage:', error);
-        localStorage.setItem('questions', JSON.stringify(questions));
+        console.error('❌ خطأ في حفظ الأسئلة في Supabase:', error);
+        saveToStorage('questions', questions);
+        console.log('💾 تم حفظ الأسئلة في localStorage كنسخة احتياطية');
     }
 }
 
@@ -528,11 +582,10 @@ async function deleteSelectedStudents() {
         const updatedStudents = students.filter((_, index) => !indicesToDelete.includes(index));
         
         try {
-            // حذف من Supabase
             const { error } = await supabaseClient
                 .from('students')
                 .delete()
-                .neq('id', 0); // حذف الكل وإعادة إضافة المتبقين
+                .neq('id', 0);
             
             if (!error && updatedStudents.length > 0) {
                 await supabaseClient
