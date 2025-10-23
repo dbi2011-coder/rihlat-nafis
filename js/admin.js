@@ -235,14 +235,14 @@ function updateOptionsContainer() {
         optionDiv.className = 'form-group';
         optionDiv.innerHTML = `
             <label>الخيار ${i}</label>
-            <input type="text" class="option-input" data-option="${i}" placeholder="أدخل نص الخيار ${i}" required>
+            <input type="text" class="option-input" data-option="${i}" placeholder="أدخل نص الخيار ${i}">
         `;
         container.appendChild(optionDiv);
         
         const radioDiv = document.createElement('div');
         radioDiv.className = 'option-item';
         radioDiv.innerHTML = `
-            <input type="radio" name="correct-answer" id="correct-${i}" value="${i}" required>
+            <input type="radio" name="correct-answer" id="correct-${i}" value="${i}">
             <label for="correct-${i}">الخيار ${i}</label>
         `;
         correctAnswerContainer.appendChild(radioDiv);
@@ -261,7 +261,7 @@ function addReadingQuestion() {
         </div>
         <div class="form-group">
             <label>نص السؤال</label>
-            <textarea class="reading-question-text" placeholder="أدخل نص السؤال..." required></textarea>
+            <textarea class="reading-question-text" placeholder="أدخل نص السؤال..."></textarea>
         </div>
         <div class="form-group">
             <label>عدد الخيارات</label>
@@ -307,14 +307,14 @@ function updateReadingQuestionOptions(questionId) {
         optionDiv.className = 'form-group';
         optionDiv.innerHTML = `
             <label>الخيار ${i}</label>
-            <input type="text" class="reading-option-input" data-option="${i}" placeholder="أدخل نص الخيار ${i}" required>
+            <input type="text" class="reading-option-input" data-option="${i}" placeholder="أدخل نص الخيار ${i}">
         `;
         optionsContainer.appendChild(optionDiv);
         
         const radioDiv = document.createElement('div');
         radioDiv.className = 'option-item';
         radioDiv.innerHTML = `
-            <input type="radio" name="reading-correct-${questionId}" id="reading-correct-${questionId}-${i}" value="${i}" required>
+            <input type="radio" name="reading-correct-${questionId}" id="reading-correct-${questionId}-${i}" value="${i}">
             <label for="reading-correct-${questionId}-${i}">الخيار ${i}</label>
         `;
         correctAnswerContainer.appendChild(radioDiv);
@@ -338,16 +338,16 @@ async function addQuestion(e) {
     e.preventDefault();
     console.log('بدء إضافة سؤال جديد...');
     
-    const questionText = document.getElementById('question-text').value;
+    const questionText = document.getElementById('question-text').value.trim();
     const questionType = document.getElementById('question-type').value;
     
-    let question;
-    
+    // التحقق من الحقول المطلوبة بناءً على نوع السؤال
     if (questionType === 'reading-comprehension') {
-        const readingPassage = document.getElementById('reading-passage').value;
+        const readingPassage = document.getElementById('reading-passage').value.trim();
         
-        if (!readingPassage.trim()) {
+        if (!readingPassage) {
             showAlert('يرجى إدخال قطعة الاستيعاب', 'error');
+            document.getElementById('reading-passage').focus();
             return;
         }
         
@@ -357,16 +357,38 @@ async function addQuestion(e) {
             return;
         }
         
+    } else {
+        // الأسئلة العادية
+        if (!questionText) {
+            showAlert('يرجى إدخال نص السؤال', 'error');
+            document.getElementById('question-text').focus();
+            return;
+        }
+        
+        const correctAnswer = document.querySelector('input[name="correct-answer"]:checked');
+        if (!correctAnswer) {
+            showAlert('يرجى اختيار الإجابة الصحيحة', 'error');
+            return;
+        }
+    }
+    
+    let question;
+    
+    if (questionType === 'reading-comprehension') {
+        const readingPassage = document.getElementById('reading-passage').value.trim();
+        const readingQuestionElements = document.querySelectorAll('.reading-question-container');
+        
         const passageQuestions = [];
         
         for (const questionDiv of readingQuestionElements) {
             const questionId = questionDiv.getAttribute('data-id');
-            const questionText = questionDiv.querySelector('.reading-question-text').value;
+            const questionText = questionDiv.querySelector('.reading-question-text').value.trim();
             const optionsCount = parseInt(questionDiv.querySelector('.reading-options-count').value);
             const correctAnswer = questionDiv.querySelector(`input[name="reading-correct-${questionId}"]:checked`);
             
-            if (!questionText.trim()) {
+            if (!questionText) {
                 showAlert('يرجى إدخال نص جميع الأسئلة', 'error');
+                questionDiv.querySelector('.reading-question-text').focus();
                 return;
             }
             
@@ -380,6 +402,7 @@ async function addQuestion(e) {
                 const optionInput = questionDiv.querySelector(`.reading-option-input[data-option="${i}"]`);
                 if (!optionInput || !optionInput.value.trim()) {
                     showAlert(`يرجى إدخال نص جميع الخيارات`, 'error');
+                    optionInput.focus();
                     return;
                 }
                 options.push(optionInput.value);
@@ -406,16 +429,12 @@ async function addQuestion(e) {
         const optionsCount = parseInt(document.getElementById('options-count').value);
         const correctAnswer = document.querySelector('input[name="correct-answer"]:checked');
         
-        if (!correctAnswer) {
-            showAlert('يرجى اختيار الإجابة الصحيحة', 'error');
-            return;
-        }
-        
         const options = [];
         for (let i = 1; i <= optionsCount; i++) {
             const optionInput = document.querySelector(`.option-input[data-option="${i}"]`);
-            if (!optionInput || optionInput.value.trim() === '') {
+            if (!optionInput || !optionInput.value.trim()) {
                 showAlert(`يرجى إدخال نص الخيار ${i}`, 'error');
+                optionInput.focus();
                 return;
             }
             options.push(optionInput.value);
@@ -427,7 +446,7 @@ async function addQuestion(e) {
             type: questionType,
             options: options,
             correct_answer: parseInt(correctAnswer.value),
-            media_url: questionType === 'multiple-with-media' ? document.getElementById('media-url').value : null,
+            media_url: questionType === 'multiple-with-media' ? document.getElementById('media-url').value.trim() : null,
             created_at: new Date().toISOString()
         };
     }
