@@ -345,10 +345,8 @@ async function initializeApp() {
     const isConnected = await checkSupabaseConnection();
     if (isConnected) {
         console.log('✅ Connected to Supabase');
-        showAlert('تم الاتصال بنجاح مع قاعدة البيانات السحابية', 'success');
     } else {
         console.log('⚠️ Using localStorage as primary storage');
-        showAlert('جاري استخدام التخزين المحلي', 'warning');
     }
     
     return true;
