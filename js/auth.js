@@ -1,10 +1,25 @@
-// نظام المصادقة وإدارة الجلسات
+// نظام المصادقة وإدارة الجلسات مع Supabase
 
-function loginAdmin(username, password) {
+async function loginAdmin(username, password) {
     if (username === 'عاصم البيشي' && password === '0509894176') {
-        localStorage.setItem('adminLoggedIn', 'true');
-        localStorage.setItem('adminLoginTime', new Date().toISOString());
-        return true;
+        try {
+            // حفظ في localStorage للجلسة المحلية
+            localStorage.setItem('adminLoggedIn', 'true');
+            localStorage.setItem('adminLoginTime', new Date().toISOString());
+            
+            // التحقق من اتصال Supabase
+            const isConnected = await checkSupabaseConnection();
+            if (isConnected) {
+                console.log('✅ Supabase connection successful');
+            } else {
+                console.log('⚠️ Using localStorage as fallback');
+            }
+            
+            return true;
+        } catch (error) {
+            console.log('Supabase auth not configured, using local storage only');
+            return true;
+        }
     }
     return false;
 }
