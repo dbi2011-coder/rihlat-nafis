@@ -39,7 +39,7 @@
                 <!-- قسم نص السؤال - سيتم إخفاؤه عند اختيار استيعاب المقروء -->
                 <div class="form-group" id="standard-question-group">
                     <label for="question-text">نص السؤال</label>
-                    <textarea id="question-text" rows="3" required></textarea>
+                    <textarea id="question-text" rows="3" placeholder="أدخل نص السؤال هنا..."></textarea>
                 </div>
                 
                 <div class="form-group">
@@ -54,7 +54,7 @@
                 <!-- قطعة استيعاب المقروء -->
                 <div class="form-group" id="reading-passage-group" style="display: none;">
                     <label for="reading-passage">قطعة الاستيعاب</label>
-                    <textarea id="reading-passage" rows="5" placeholder="أدخل نص القطعة هنا..." required></textarea>
+                    <textarea id="reading-passage" rows="5" placeholder="أدخل نص القطعة هنا..."></textarea>
                 </div>
                 
                 <!-- أسئلة استيعاب المقروء -->
@@ -228,6 +228,13 @@
 
             // تهيئة واجهة المسؤول
             initAdmin();
+        });
+
+        // منع الإرسال التلقائي للنموذج عند الضغط على Enter
+        document.getElementById('add-question-form').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
         });
     </script>
 </body>
