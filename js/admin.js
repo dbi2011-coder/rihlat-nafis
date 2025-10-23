@@ -1,4 +1,4 @@
-// إدارة الأسئلة والإعدادات للمسؤول مع دعم Supabase
+// إدارة الأسئلة والإعدادات للمسؤول مع Supabase
 
 let questions = [];
 let authorizedStudents = [];
@@ -10,75 +10,13 @@ let settings = {
 };
 
 let readingQuestions = [];
-let useSupabase = false;
 
 async function initAdmin() {
-    // التحقق من اتصال Supabase
-    useSupabase = await checkSupabaseConnection();
-    
-    if (useSupabase) {
-        console.log('Using Supabase for data storage');
-        await loadDataFromSupabase();
-    } else {
-        console.log('Using local storage for data storage');
-        await loadDataFromLocalStorage();
-    }
-    
-    loadQuestions();
-    loadReports();
-    loadSettings();
-    loadAuthorizedStudents();
+    await loadQuestions();
+    await loadReports();
+    await loadSettings();
+    await loadAuthorizedStudents();
     setupEventListeners();
-    
-    // إضافة زر المزامنة
-    addSyncButton();
-}
-
-async function loadDataFromSupabase() {
-    try {
-        const [questionsData, authStudentsData, settingsData] = await Promise.all([
-            supabaseService.getQuestions(),
-            supabaseService.getAuthorizedStudents(),
-            supabaseService.getSettings()
-        ]);
-        
-        // تحويل بيانات الأسئلة من Supabase
-        questions = questionsData.map(item => ({
-            ...item.question_data,
-            supabase_id: item.id
-        }));
-        
-        // تحويل بيانات الطلاب المصرح لهم
-        authorizedStudents = authStudentsData.map(item => ({
-            id: item.student_id,
-            name: item.name,
-            usedAttempts: item.used_attempts,
-            supabase_id: item.id
-        }));
-        
-        if (settingsData) {
-            settings = settingsData;
-        }
-        
-        // حفظ نسخة محلية للنسخ الاحتياطي
-        localStorage.setItem('questions', JSON.stringify(questions));
-        localStorage.setItem('authorizedStudents', JSON.stringify(authorizedStudents));
-        localStorage.setItem('settings', JSON.stringify(settings));
-        
-    } catch (error) {
-        console.error('Error loading data from Supabase:', error);
-        await loadDataFromLocalStorage();
-    }
-}
-
-async function loadDataFromLocalStorage() {
-    questions = JSON.parse(localStorage.getItem('questions')) || [];
-    authorizedStudents = JSON.parse(localStorage.getItem('authorizedStudents')) || [];
-    
-    const localSettings = JSON.parse(localStorage.getItem('settings'));
-    if (localSettings) {
-        settings = { ...settings, ...localSettings };
-    }
 }
 
 function setupEventListeners() {
@@ -92,7 +30,26 @@ function setupEventListeners() {
 
     // تغيير نوع السؤال
     document.getElementById('question-type').addEventListener('change', function() {
-        handleQuestionTypeChange(this.value);
+        const type = this.value;
+        const mediaGroup = document.getElementById('media-url-group');
+        const readingGroup = document.getElementById('reading-passage-group');
+        const readingQuestionsContainer = document.getElementById('reading-questions-container');
+        const standardOptionsSection = document.getElementById('standard-options-section');
+        const standardQuestionGroup = document.getElementById('standard-question-group');
+        
+        // إظهار/إخفاء العناصر حسب نوع السؤال
+        mediaGroup.style.display = type === 'multiple-with-media' ? 'block' : 'none';
+        readingGroup.style.display = type === 'reading-comprehension' ? 'block' : 'none';
+        readingQuestionsContainer.style.display = type === 'reading-comprehension' ? 'block' : 'none';
+        standardOptionsSection.style.display = type === 'reading-comprehension' ? 'none' : 'block';
+        standardQuestionGroup.style.display = type === 'reading-comprehension' ? 'none' : 'block';
+        
+        if (type === 'reading-comprehension') {
+            readingQuestions = [];
+            loadReadingQuestions();
+        } else {
+            updateOptionsContainer();
+        }
     });
 
     // تغيير عدد الخيارات
@@ -102,10 +59,7 @@ function setupEventListeners() {
     document.getElementById('add-reading-question').addEventListener('click', addReadingQuestion);
 
     // إضافة سؤال جديد
-    document.getElementById('add-question-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        addQuestion(e);
-    });
+    document.getElementById('add-question-form').addEventListener('submit', addQuestion);
 
     // حفظ الإعدادات
     document.getElementById('save-settings').addEventListener('click', saveSettings);
@@ -130,59 +84,17 @@ function setupEventListeners() {
     document.getElementById('select-all-students').addEventListener('change', toggleSelectAllStudents);
     document.getElementById('print-report').addEventListener('click', printReport);
     document.getElementById('print-authorized-students').addEventListener('click', printAuthorizedStudents);
-
-    // تهيئة الحاوية عند التحميل
-    updateOptionsContainer();
-}
-
-function handleQuestionTypeChange(type) {
-    const mediaGroup = document.getElementById('media-url-group');
-    const readingGroup = document.getElementById('reading-passage-group');
-    const readingQuestionsContainer = document.getElementById('reading-questions-container');
-    const standardOptionsSection = document.getElementById('standard-options-section');
-    const standardQuestionGroup = document.getElementById('standard-question-group');
-    
-    // إظهار/إخفاء العناصر حسب نوع السؤال
-    mediaGroup.style.display = type === 'multiple-with-media' ? 'block' : 'none';
-    readingGroup.style.display = type === 'reading-comprehension' ? 'block' : 'none';
-    readingQuestionsContainer.style.display = type === 'reading-comprehension' ? 'block' : 'none';
-    standardOptionsSection.style.display = type === 'reading-comprehension' ? 'none' : 'block';
-    standardQuestionGroup.style.display = type === 'reading-comprehension' ? 'none' : 'block';
-    
-    if (type === 'reading-comprehension') {
-        readingQuestions = [];
-        loadReadingQuestions();
-    }
-}
-
-function addSyncButton() {
-    // التحقق إذا كان الزر موجوداً مسبقاً
-    if (document.getElementById('sync-button')) return;
-    
-    const syncButton = document.createElement('button');
-    syncButton.id = 'sync-button';
-    syncButton.textContent = '🔄 مزامنة مع السحابة';
-    syncButton.className = 'btn-primary';
-    syncButton.style.marginRight = '10px';
-    syncButton.title = 'مزامنة البيانات المحلية مع السحابة';
-    syncButton.addEventListener('click', syncLocalToCloud);
-    
-    const adminInfo = document.querySelector('.admin-info');
-    adminInfo.insertBefore(syncButton, adminInfo.firstChild);
 }
 
 function switchTab(tabId) {
-    // إخفاء جميع المحتويات
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.remove('active');
     });
     
-    // إلغاء تنشيط جميع الأزرار
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
     });
     
-    // إظهار المحتوى المحدد
     document.getElementById(tabId).classList.add('active');
     document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
 }
@@ -248,7 +160,6 @@ function addReadingQuestion() {
     
     document.getElementById('reading-questions-list').appendChild(questionDiv);
     
-    // تحديث الخيارات لهذا السؤال
     const optionsCountSelect = questionDiv.querySelector('.reading-options-count');
     optionsCountSelect.addEventListener('change', function() {
         updateReadingQuestionOptions(questionId);
@@ -259,8 +170,6 @@ function addReadingQuestion() {
 
 function updateReadingQuestionOptions(questionId) {
     const questionDiv = document.querySelector(`.reading-question-container[data-id="${questionId}"]`);
-    if (!questionDiv) return;
-    
     const optionsCount = parseInt(questionDiv.querySelector('.reading-options-count').value);
     const optionsContainer = questionDiv.querySelector('.reading-options-container');
     const correctAnswerContainer = questionDiv.querySelector('.reading-correct-answer-container');
@@ -302,25 +211,19 @@ function loadReadingQuestions() {
 async function addQuestion(e) {
     e.preventDefault();
     
-    const questionText = document.getElementById('question-text').value.trim();
+    const questionText = document.getElementById('question-text').value;
     const questionType = document.getElementById('question-type').value;
-    
-    if (!questionText) {
-        alert('يرجى إدخال نص السؤال');
-        return;
-    }
     
     let question;
     
     if (questionType === 'reading-comprehension') {
-        const readingPassage = document.getElementById('reading-passage').value.trim();
+        const readingPassage = document.getElementById('reading-passage').value;
         
-        if (!readingPassage) {
+        if (!readingPassage.trim()) {
             alert('يرجى إدخال قطعة الاستيعاب');
             return;
         }
         
-        // جمع أسئلة القطعة
         const readingQuestionElements = document.querySelectorAll('.reading-question-container');
         if (readingQuestionElements.length === 0) {
             alert('يرجى إضافة أسئلة للقطعة');
@@ -328,32 +231,28 @@ async function addQuestion(e) {
         }
         
         const passageQuestions = [];
-        let hasErrors = false;
         
         readingQuestionElements.forEach(questionDiv => {
             const questionId = questionDiv.getAttribute('data-id');
-            const qText = questionDiv.querySelector('.reading-question-text').value.trim();
+            const questionText = questionDiv.querySelector('.reading-question-text').value;
             const optionsCount = parseInt(questionDiv.querySelector('.reading-options-count').value);
             const correctAnswer = questionDiv.querySelector(`input[name="reading-correct-${questionId}"]:checked`);
             
-            if (!qText) {
+            if (!questionText.trim()) {
                 alert('يرجى إدخال نص جميع الأسئلة');
-                hasErrors = true;
                 return;
             }
             
             if (!correctAnswer) {
                 alert('يرجى اختيار الإجابة الصحيحة لجميع الأسئلة');
-                hasErrors = true;
                 return;
             }
             
             const options = [];
             for (let i = 1; i <= optionsCount; i++) {
                 const optionInput = questionDiv.querySelector(`.reading-option-input[data-option="${i}"]`);
-                if (!optionInput || !optionInput.value.trim()) {
+                if (!optionInput.value.trim()) {
                     alert(`يرجى إدخال نص جميع الخيارات`);
-                    hasErrors = true;
                     return;
                 }
                 options.push(optionInput.value);
@@ -361,13 +260,11 @@ async function addQuestion(e) {
             
             passageQuestions.push({
                 id: questionId,
-                text: qText,
+                text: questionText,
                 options: options,
                 correctAnswer: parseInt(correctAnswer.value)
             });
         });
-        
-        if (hasErrors) return;
         
         question = {
             id: Date.now(),
@@ -378,7 +275,6 @@ async function addQuestion(e) {
         };
         
     } else {
-        // الأسئلة العادية
         const optionsCount = parseInt(document.getElementById('options-count').value);
         const correctAnswer = document.querySelector('input[name="correct-answer"]:checked');
         
@@ -388,19 +284,14 @@ async function addQuestion(e) {
         }
         
         const options = [];
-        let hasErrors = false;
-        
         for (let i = 1; i <= optionsCount; i++) {
             const optionInput = document.querySelector(`.option-input[data-option="${i}"]`);
-            if (!optionInput || optionInput.value.trim() === '') {
+            if (optionInput.value.trim() === '') {
                 alert(`يرجى إدخال نص الخيار ${i}`);
-                hasErrors = true;
-                break;
+                return;
             }
             options.push(optionInput.value);
         }
-        
-        if (hasErrors) return;
         
         question = {
             id: Date.now(),
@@ -408,69 +299,51 @@ async function addQuestion(e) {
             type: questionType,
             options: options,
             correctAnswer: parseInt(correctAnswer.value),
-            mediaUrl: questionType === 'multiple-with-media' ? document.getElementById('media-url').value.trim() : null
+            mediaUrl: questionType === 'multiple-with-media' ? document.getElementById('media-url').value : null
         };
     }
     
-    // إضافة السؤال إلى المصفوفة
     questions.push(question);
-    
-    // حفظ الأسئلة
     await saveQuestions();
-    
-    // إعادة تحميل قائمة الأسئلة
     await loadQuestions();
     
-    // إعادة تعيين النموذج
-    resetQuestionForm();
-    
-    alert('تم إضافة السؤال بنجاح');
-}
-
-function resetQuestionForm() {
     document.getElementById('add-question-form').reset();
     document.getElementById('media-url-group').style.display = 'none';
     document.getElementById('reading-passage-group').style.display = 'none';
     document.getElementById('reading-questions-container').style.display = 'none';
     document.getElementById('standard-options-section').style.display = 'block';
     document.getElementById('standard-question-group').style.display = 'block';
-    
-    // إعادة تعيين نوع السؤال إلى الافتراضي
-    document.getElementById('question-type').value = 'multiple';
-    
-    // تحديث الحاوية
     updateOptionsContainer();
     loadReadingQuestions();
+    
+    alert('تم إضافة السؤال بنجاح');
 }
 
-async function saveQuestions() {
-    if (useSupabase) {
-        // في Supabase، نحفظ كل سؤال على حدة
-        for (const question of questions) {
-            if (!question.supabase_id) {
-                try {
-                    const savedQuestion = await supabaseService.addQuestion(question);
-                    if (savedQuestion) {
-                        question.supabase_id = savedQuestion.id;
-                    }
-                } catch (error) {
-                    console.error('Error saving question to Supabase:', error);
-                    // نستمر في المحاولة مع الأسئلة الأخرى
-                }
-            }
-        }
+async function loadQuestions() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('questions')
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        questions = data || [];
+        
+    } catch (error) {
+        console.error('Error loading questions from Supabase:', error);
+        questions = JSON.parse(localStorage.getItem('questions')) || [];
     }
     
-    // حفظ محلي دائماً كنسخة احتياطية
-    localStorage.setItem('questions', JSON.stringify(questions));
+    displayQuestions();
 }
 
-function loadQuestions() {
+function displayQuestions() {
     const container = document.getElementById('questions-list');
     container.innerHTML = '';
     
     if (questions.length === 0) {
-        container.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">لا توجد أسئلة مضافة بعد</p>';
+        container.innerHTML = '<p>لا توجد أسئلة مضافة بعد</p>';
         return;
     }
     
@@ -480,12 +353,11 @@ function loadQuestions() {
         
         let questionHTML = `
             <h4>السؤال ${index + 1} - ${getQuestionTypeText(question.type)}</h4>
-            ${question.supabase_id ? '<small style="color: green;">✓ مخزن في السحابة</small>' : '<small style="color: orange;">💾 مخزن محلياً</small>'}
         `;
         
         if (question.type === 'reading-comprehension') {
             questionHTML += `
-                <p><strong>قطعة الاستيعاب:</strong> ${question.readingPassage.substring(0, 100)}${question.readingPassage.length > 100 ? '...' : ''}</p>
+                <p><strong>قطعة الاستيعاب:</strong> ${question.readingPassage.substring(0, 100)}...</p>
                 <p><strong>عدد الأسئلة:</strong> ${question.passageQuestions.length}</p>
                 <div class="passage-questions">
                     ${question.passageQuestions.map((q, qIndex) => `
@@ -531,47 +403,69 @@ function getQuestionTypeText(type) {
 
 async function deleteQuestion(id) {
     if (confirm('هل أنت متأكد من حذف هذا السؤال؟')) {
-        const question = questions.find(q => q.id === id);
-        
-        if (useSupabase && question.supabase_id) {
-            try {
-                await supabaseService.deleteQuestion(question.supabase_id);
-            } catch (error) {
-                console.error('Error deleting question from Supabase:', error);
-            }
+        try {
+            const { error } = await supabaseClient
+                .from('questions')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
+            
+        } catch (error) {
+            console.error('Error deleting from Supabase:', error);
         }
         
         questions = questions.filter(q => q.id !== id);
         await saveQuestions();
         await loadQuestions();
+    }
+}
+
+async function saveQuestions() {
+    try {
+        // حذف جميع الأسئلة القديمة وإضافة الجديدة
+        const { error: deleteError } = await supabaseClient
+            .from('questions')
+            .delete()
+            .neq('id', 0);
         
-        alert('تم حذف السؤال بنجاح');
+        if (deleteError) throw deleteError;
+        
+        if (questions.length > 0) {
+            const { error: insertError } = await supabaseClient
+                .from('questions')
+                .insert(questions);
+            
+            if (insertError) throw insertError;
+        }
+        
+    } catch (error) {
+        console.error('Error saving to Supabase, using localStorage:', error);
+        localStorage.setItem('questions', JSON.stringify(questions));
     }
 }
 
 async function loadReports() {
     let students = [];
     
-    if (useSupabase) {
-        try {
-            students = await supabaseService.getStudentsResults();
-            // تحويل البيانات من Supabase
-            students = students.map(item => ({
-                name: item.name,
-                score: item.score,
-                total: item.total,
-                percentage: item.percentage,
-                timeTaken: item.time_taken,
-                date: item.date
-            }));
-        } catch (error) {
-            console.error('Error loading reports from Supabase:', error);
-            students = JSON.parse(localStorage.getItem('students')) || [];
-        }
-    } else {
+    try {
+        const { data, error } = await supabaseClient
+            .from('students')
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        students = data || [];
+        
+    } catch (error) {
+        console.error('Error loading students from Supabase:', error);
         students = JSON.parse(localStorage.getItem('students')) || [];
     }
     
+    displayReports(students);
+}
+
+function displayReports(students) {
     const tbody = document.querySelector('#students-report tbody');
     
     tbody.innerHTML = '';
@@ -592,7 +486,7 @@ async function loadReports() {
             <td><input type="checkbox" class="student-checkbox" data-index="${index}"></td>
             <td>${student.name}</td>
             <td>${student.percentage}%</td>
-            <td>${student.timeTaken}</td>
+            <td>${student.time_taken || student.timeTaken}</td>
             <td>${student.date}</td>
         `;
         tbody.appendChild(tr);
@@ -604,31 +498,13 @@ async function loadReports() {
 
 function showTopStudents() {
     const count = parseInt(document.getElementById('top-students-count').value);
-    const students = JSON.parse(localStorage.getItem('students')) || [];
-    
-    if (students.length === 0) {
-        alert('لا توجد بيانات للطلاب');
-        return;
-    }
+    let students = JSON.parse(localStorage.getItem('students')) || [];
     
     const topStudents = students
         .sort((a, b) => b.percentage - a.percentage)
         .slice(0, count);
     
-    const tbody = document.querySelector('#students-report tbody');
-    tbody.innerHTML = '';
-    
-    topStudents.forEach((student, index) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><input type="checkbox" class="student-checkbox" data-index="${index}"></td>
-            <td>${student.name}</td>
-            <td>${student.percentage}%</td>
-            <td>${student.timeTaken}</td>
-            <td>${student.date}</td>
-        `;
-        tbody.appendChild(tr);
-    });
+    displayReports(topStudents);
 }
 
 function toggleSelectAllStudents() {
@@ -650,36 +526,46 @@ async function deleteSelectedStudents() {
         const indicesToDelete = Array.from(checkboxes).map(cb => parseInt(cb.getAttribute('data-index')));
         
         const updatedStudents = students.filter((_, index) => !indicesToDelete.includes(index));
-        localStorage.setItem('students', JSON.stringify(updatedStudents));
         
-        if (useSupabase) {
-            try {
-                // في حالة Supabase، نحتاج إلى معرفات السحابة للحذف
-                // هذا تنفيذ مبسط - يمكن تحسينه لاحقاً
-                await supabaseService.deleteStudentResults();
-            } catch (error) {
-                console.error('Error deleting students from Supabase:', error);
+        try {
+            // حذف من Supabase
+            const { error } = await supabaseClient
+                .from('students')
+                .delete()
+                .neq('id', 0); // حذف الكل وإعادة إضافة المتبقين
+            
+            if (!error && updatedStudents.length > 0) {
+                await supabaseClient
+                    .from('students')
+                    .insert(updatedStudents);
             }
+            
+        } catch (error) {
+            console.error('Error updating Supabase:', error);
         }
         
-        await loadReports();
+        localStorage.setItem('students', JSON.stringify(updatedStudents));
+        loadReports();
         alert('تم حذف الطلاب المحددين بنجاح');
     }
 }
 
 async function deleteAllStudents() {
     if (confirm('هل أنت متأكد من حذف جميع الطلاب ونتائجهم؟')) {
-        localStorage.removeItem('students');
-        
-        if (useSupabase) {
-            try {
-                await supabaseService.deleteStudentResults();
-            } catch (error) {
-                console.error('Error deleting all students from Supabase:', error);
-            }
+        try {
+            const { error } = await supabaseClient
+                .from('students')
+                .delete()
+                .neq('id', 0);
+            
+            if (error) throw error;
+            
+        } catch (error) {
+            console.error('Error deleting from Supabase:', error);
         }
         
-        await loadReports();
+        localStorage.removeItem('students');
+        loadReports();
         alert('تم حذف جميع الطلاب بنجاح');
     }
 }
@@ -688,13 +574,36 @@ function printReport() {
     window.print();
 }
 
-function loadSettings() {
+async function loadSettings() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('settings')
+            .select('*')
+            .single();
+        
+        if (error) throw error;
+        
+        settings = data;
+        
+    } catch (error) {
+        console.error('Error loading settings from Supabase:', error);
+        settings = JSON.parse(localStorage.getItem('settings')) || {
+            questionsCount: 10,
+            loginType: 'open',
+            attemptsCount: 1,
+            resultsDisplay: 'show-answers'
+        };
+    }
+    
+    applySettings();
+}
+
+function applySettings() {
     document.getElementById('questions-count').value = settings.questionsCount;
     document.getElementById('login-type').value = settings.loginType;
     document.getElementById('attempts-count').value = settings.attemptsCount;
     document.getElementById('results-display').value = settings.resultsDisplay;
     
-    // تحديث عرض العناصر بناءً على نوع الدخول
     const attemptsGroup = document.getElementById('attempts-count-group');
     const authorizedSection = document.getElementById('authorized-students-section');
     const isRestricted = settings.loginType === 'restricted';
@@ -705,41 +614,55 @@ function loadSettings() {
 
 async function saveSettings() {
     settings = {
-        questionsCount: parseInt(document.getElementById('questions-count').value) || 10,
+        questionsCount: parseInt(document.getElementById('questions-count').value),
         loginType: document.getElementById('login-type').value,
-        attemptsCount: parseInt(document.getElementById('attempts-count').value) || 1,
+        attemptsCount: parseInt(document.getElementById('attempts-count').value),
         resultsDisplay: document.getElementById('results-display').value
     };
     
-    if (useSupabase) {
-        try {
-            await supabaseService.saveSettings(settings);
-        } catch (error) {
-            console.error('Error saving settings to Supabase:', error);
-        }
+    try {
+        const { error } = await supabaseClient
+            .from('settings')
+            .upsert(settings);
+        
+        if (error) throw error;
+        
+    } catch (error) {
+        console.error('Error saving settings to Supabase:', error);
     }
     
-    // حفظ محلي دائماً
     localStorage.setItem('settings', JSON.stringify(settings));
-    
     alert('تم حفظ الإعدادات بنجاح');
 }
 
-function loadAuthorizedStudents() {
+async function loadAuthorizedStudents() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('authorized_students')
+            .select('*');
+        
+        if (error) throw error;
+        
+        authorizedStudents = data || [];
+        
+    } catch (error) {
+        console.error('Error loading authorized students from Supabase:', error);
+        authorizedStudents = JSON.parse(localStorage.getItem('authorizedStudents')) || [];
+    }
+    
+    displayAuthorizedStudents();
+}
+
+function displayAuthorizedStudents() {
     const tbody = document.querySelector('#authorized-students-list tbody');
     tbody.innerHTML = '';
-    
-    if (authorizedStudents.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">لا توجد بيانات</td></tr>';
-        return;
-    }
     
     authorizedStudents.forEach((student, index) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${student.id}</td>
             <td>${student.name}</td>
-            <td>${student.usedAttempts || 0}</td>
+            <td>${student.used_attempts || student.usedAttempts || 0}</td>
             <td>
                 <button class="btn-danger btn-small" onclick="deleteAuthorizedStudent(${index})">حذف</button>
             </td>
@@ -757,7 +680,6 @@ async function addAuthorizedStudent() {
         return;
     }
     
-    // التحقق من عدم تكرار رقم الهوية
     if (authorizedStudents.some(s => s.id === studentId)) {
         alert('رقم الهوية/الإقامة مسجل مسبقاً');
         return;
@@ -766,25 +688,13 @@ async function addAuthorizedStudent() {
     const newStudent = {
         id: studentId,
         name: studentName,
-        usedAttempts: 0
+        used_attempts: 0
     };
-    
-    if (useSupabase) {
-        try {
-            const savedStudent = await supabaseService.addAuthorizedStudent(newStudent);
-            if (savedStudent) {
-                newStudent.supabase_id = savedStudent.id;
-            }
-        } catch (error) {
-            console.error('Error adding authorized student to Supabase:', error);
-        }
-    }
     
     authorizedStudents.push(newStudent);
     await saveAuthorizedStudents();
     await loadAuthorizedStudents();
     
-    // إعادة تعيين الحقول
     document.getElementById('student-id').value = '';
     document.getElementById('student-name').value = '';
     
@@ -793,31 +703,47 @@ async function addAuthorizedStudent() {
 
 async function deleteAuthorizedStudent(index) {
     if (confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
-        const student = authorizedStudents[index];
+        const studentToDelete = authorizedStudents[index];
         
-        if (useSupabase && student.supabase_id) {
-            try {
-                await supabaseService.deleteAuthorizedStudent(student.supabase_id);
-            } catch (error) {
-                console.error('Error deleting authorized student from Supabase:', error);
-            }
+        try {
+            const { error } = await supabaseClient
+                .from('authorized_students')
+                .delete()
+                .eq('id', studentToDelete.id);
+            
+            if (error) throw error;
+            
+        } catch (error) {
+            console.error('Error deleting from Supabase:', error);
         }
         
         authorizedStudents.splice(index, 1);
         await saveAuthorizedStudents();
         await loadAuthorizedStudents();
-        
-        alert('تم حذف الطالب بنجاح');
     }
 }
 
 async function saveAuthorizedStudents() {
-    if (useSupabase) {
-        // في Supabase، يتم الحفظ تلقائياً عند الإضافة/الحذف
+    try {
+        const { error: deleteError } = await supabaseClient
+            .from('authorized_students')
+            .delete()
+            .neq('id', '');
+        
+        if (deleteError) throw deleteError;
+        
+        if (authorizedStudents.length > 0) {
+            const { error: insertError } = await supabaseClient
+                .from('authorized_students')
+                .insert(authorizedStudents);
+            
+            if (insertError) throw insertError;
+        }
+        
+    } catch (error) {
+        console.error('Error saving to Supabase, using localStorage:', error);
+        localStorage.setItem('authorizedStudents', JSON.stringify(authorizedStudents));
     }
-    
-    // حفظ محلي دائماً
-    localStorage.setItem('authorizedStudents', JSON.stringify(authorizedStudents));
 }
 
 function printAuthorizedStudents() {
@@ -843,13 +769,11 @@ function printAuthorizedStudents() {
     printWindow.print();
 }
 
-// دالة للتحقق من اتصال Supabase
-async function checkSupabaseConnection() {
-    try {
-        const { data, error } = await supabase.from('questions').select('count').limit(1);
-        return !error;
-    } catch (error) {
-        console.error('Supabase connection error:', error);
-        return false;
-    }
-}
+// تحديث الحاوية عند التحميل
+document.addEventListener('DOMContentLoaded', function() {
+    updateOptionsContainer();
+});
+
+window.deleteContent = deleteQuestion;
+window.removeReadingQuestion = removeReadingQuestion;
+window.deleteAuthorizedStudent = deleteAuthorizedStudent;
