@@ -1,4 +1,4 @@
-// واجهة الطالب والاختبارات مع دعم Supabase
+// واجهة الطالب والاختبارات مع Supabase
 
 let currentQuestionIndex = 0;
 let studentAnswers = [];
@@ -6,49 +6,33 @@ let startTime;
 let timerInterval;
 let questions = [];
 let settings = {};
-let useSupabase = false;
 
 async function initStudent() {
-    // التحقق من اتصال Supabase
-    useSupabase = await checkSupabaseConnection();
-    
-    if (useSupabase) {
-        console.log('Using Supabase for data storage');
-        await loadSettingsFromSupabase();
-    } else {
-        console.log('Using local storage for data storage');
-        await loadSettingsFromLocalStorage();
-    }
-    
+    await loadSettings();
     showLoginInterface();
 }
 
-async function loadSettingsFromSupabase() {
+async function loadSettings() {
     try {
-        const settingsData = await supabaseService.getSettings();
-        if (settingsData) {
-            settings = settingsData;
-        } else {
-            await loadSettingsFromLocalStorage();
-        }
+        const { data, error } = await supabaseClient
+            .from('settings')
+            .select('*')
+            .single();
+        
+        if (error) throw error;
+        settings = data;
+        
     } catch (error) {
         console.error('Error loading settings from Supabase:', error);
-        await loadSettingsFromLocalStorage();
-    }
-}
-
-async function loadSettingsFromLocalStorage() {
-    const localSettings = JSON.parse(localStorage.getItem('settings'));
-    if (localSettings) {
-        settings = localSettings;
-    } else {
-        settings = {
+        settings = JSON.parse(localStorage.getItem('settings')) || {
             questionsCount: 10,
             loginType: 'open',
             attemptsCount: 1,
             resultsDisplay: 'show-answers'
         };
     }
+    
+    showLoginInterface();
 }
 
 function showLoginInterface() {
@@ -70,53 +54,44 @@ async function validateRestrictedLogin() {
     let authorizedStudents = [];
     
     try {
-        if (useSupabase) {
-            authorizedStudents = await supabaseService.getAuthorizedStudents();
-        } else {
-            authorizedStudents = JSON.parse(localStorage.getItem('authorizedStudents')) || [];
-        }
+        const { data, error } = await supabaseClient
+            .from('authorized_students')
+            .select('*');
+        
+        if (error) throw error;
+        authorizedStudents = data || [];
+        
     } catch (error) {
-        console.error('Error fetching authorized students:', error);
+        console.error('Error loading authorized students from Supabase:', error);
         authorizedStudents = JSON.parse(localStorage.getItem('authorizedStudents')) || [];
     }
     
-    // البحث عن الطالب
-    let student;
-    if (useSupabase) {
-        student = authorizedStudents.find(s => s.student_id === studentId && s.name === studentName);
-    } else {
-        student = authorizedStudents.find(s => s.id === studentId && s.name === studentName);
-    }
+    const student = authorizedStudents.find(s => s.id === studentId && s.name === studentName);
     
     if (!student) {
         alert('رقم الهوية/الإقامة أو اسم الطالب غير صحيح');
         return;
     }
     
-    // التحقق من عدد المحاولات
-    const usedAttempts = student.used_attempts || student.usedAttempts || 0;
-    if (usedAttempts >= settings.attemptsCount) {
+    if (student.used_attempts >= settings.attemptsCount) {
         alert('لقد استنفذت عدد المحاولات المسموحة');
         return;
     }
     
     // تحديث عدد المحاولات المستخدمة
-    const newAttempts = usedAttempts + 1;
+    student.used_attempts = (student.used_attempts || 0) + 1;
     
     try {
-        if (useSupabase) {
-            await supabaseService.updateStudentAttempts(student.id, newAttempts);
-        } else {
-            student.usedAttempts = newAttempts;
-            localStorage.setItem('authorizedStudents', JSON.stringify(authorizedStudents));
-        }
+        const { error } = await supabaseClient
+            .from('authorized_students')
+            .update({ used_attempts: student.used_attempts })
+            .eq('id', studentId);
+        
+        if (error) throw error;
+        
     } catch (error) {
-        console.error('Error updating attempts:', error);
-        // في حالة الخطأ، نستمر مع التحديث المحلي
-        if (!useSupabase) {
-            student.usedAttempts = newAttempts;
-            localStorage.setItem('authorizedStudents', JSON.stringify(authorizedStudents));
-        }
+        console.error('Error updating attempts in Supabase:', error);
+        localStorage.setItem('authorizedStudents', JSON.stringify(authorizedStudents));
     }
     
     startTest(studentName);
@@ -127,15 +102,12 @@ function startTest(studentName) {
     document.getElementById('restricted-login').style.display = 'none';
     document.getElementById('test-container').style.display = 'block';
     
-    // تحميل الأسئلة وعرضها
     loadQuestionsForTest();
     displayCurrentQuestion();
     
-    // بدء المؤقت
     startTime = new Date();
     startTimer();
     
-    // حفظ اسم الطالب
     localStorage.setItem('currentStudent', studentName);
 }
 
@@ -143,14 +115,15 @@ async function loadQuestionsForTest() {
     let allQuestions = [];
     
     try {
-        if (useSupabase) {
-            const questionsData = await supabaseService.getQuestions();
-            allQuestions = questionsData.map(item => item.question_data);
-        } else {
-            allQuestions = JSON.parse(localStorage.getItem('questions')) || [];
-        }
+        const { data, error } = await supabaseClient
+            .from('questions')
+            .select('*');
+        
+        if (error) throw error;
+        allQuestions = data || [];
+        
     } catch (error) {
-        console.error('Error loading questions:', error);
+        console.error('Error loading questions from Supabase:', error);
         allQuestions = JSON.parse(localStorage.getItem('questions')) || [];
     }
     
@@ -160,19 +133,17 @@ async function loadQuestionsForTest() {
         return;
     }
     
-    // تحويل أسئلة الاستيعاب إلى أسئلة فردية
     const flattenedQuestions = [];
     allQuestions.forEach(question => {
-        if (question.type === 'reading-comprehension' && question.passageQuestions) {
-            // إضافة كل سؤال من أسئلة القطعة كسؤال منفصل
-            question.passageQuestions.forEach(passageQ => {
+        if (question.type === 'reading-comprehension' && question.passage_questions) {
+            question.passage_questions.forEach(passageQ => {
                 flattenedQuestions.push({
                     id: passageQ.id,
                     text: passageQ.text,
                     type: 'reading-comprehension-item',
                     options: passageQ.options,
                     correctAnswer: passageQ.correctAnswer,
-                    readingPassage: question.readingPassage,
+                    readingPassage: question.reading_passage,
                     parentQuestionId: question.id
                 });
             });
@@ -181,11 +152,9 @@ async function loadQuestionsForTest() {
         }
     });
     
-    // اختيار عدد عشوائي من الأسئلة
     const questionsCount = Math.min(settings.questionsCount, flattenedQuestions.length);
     questions = getRandomQuestions(flattenedQuestions, questionsCount);
     
-    // تهيئة الإجابات
     studentAnswers = new Array(questions.length).fill(null);
 }
 
@@ -207,7 +176,6 @@ function displayCurrentQuestion() {
         <h3>السؤال ${currentQuestionIndex + 1} من ${questions.length}</h3>
     `;
     
-    // إضافة قطعة الاستيعاب إذا كان السؤال من نوع استيعاب مقروء
     if (question.type === 'reading-comprehension-item' && question.readingPassage) {
         questionHTML += `
             <div class="reading-passage">
@@ -221,13 +189,12 @@ function displayCurrentQuestion() {
         <p class="question-text">${question.text}</p>
     `;
     
-    // إضافة المرفق إذا كان النوع يحتوي على مرفق
-    if (question.type === 'multiple-with-media' && question.mediaUrl) {
+    if (question.type === 'multiple-with-media' && question.media_url) {
         questionHTML += `
             <div class="media-attachment">
-                ${isYouTubeUrl(question.mediaUrl) ? 
-                    `<iframe src="${getYouTubeEmbedUrl(question.mediaUrl)}" frameborder="0" allowfullscreen></iframe>` :
-                    `<img src="${question.mediaUrl}" alt="مرفق السؤال">`
+                ${isYouTubeUrl(question.media_url) ? 
+                    `<iframe src="${getYouTubeEmbedUrl(question.media_url)}" frameborder="0" allowfullscreen></iframe>` :
+                    `<img src="${question.media_url}" alt="مرفق السؤال">`
                 }
             </div>
         `;
@@ -248,7 +215,6 @@ function displayCurrentQuestion() {
     questionDiv.innerHTML = questionHTML;
     container.appendChild(questionDiv);
     
-    // إضافة أزرار التنقل
     const navigationDiv = document.createElement('div');
     navigationDiv.className = 'navigation-buttons';
     navigationDiv.innerHTML = `
@@ -257,7 +223,6 @@ function displayCurrentQuestion() {
     `;
     container.appendChild(navigationDiv);
     
-    // إضافة مستمعي الأحداث للخيارات
     question.options.forEach((_, index) => {
         document.getElementById(`option-${index}`).addEventListener('change', function() {
             studentAnswers[currentQuestionIndex] = parseInt(this.value);
@@ -304,36 +269,33 @@ async function submitTest() {
     const endTime = new Date();
     const timeTaken = document.getElementById('timer').textContent;
     
-    // حساب النتيجة
     const score = calculateScore();
     const percentage = Math.round((score / questions.length) * 100);
     
-    // حفظ نتيجة الطالب
     const studentName = localStorage.getItem('currentStudent');
-    const studentData = {
+    const studentResult = {
         name: studentName,
         score: score,
         total: questions.length,
         percentage: percentage,
-        timeTaken: timeTaken,
+        time_taken: timeTaken,
         date: new Date().toLocaleDateString('ar-SA')
     };
     
-    // المحاولة أولاً مع Supabase
     try {
-        if (useSupabase) {
-            await supabaseService.addStudentResult(studentData);
-            console.log('تم حفظ النتيجة في Supabase');
-        } else {
-            saveStudentResultLocally(studentData);
-        }
+        const { error } = await supabaseClient
+            .from('students')
+            .insert([studentResult]);
+        
+        if (error) throw error;
+        
     } catch (error) {
-        console.error('Error saving result:', error);
-        // حفظ محلي كنسخة احتياطية
-        saveStudentResultLocally(studentData);
+        console.error('Error saving to Supabase, using localStorage:', error);
+        const students = JSON.parse(localStorage.getItem('students')) || [];
+        students.push(studentResult);
+        localStorage.setItem('students', JSON.stringify(students));
     }
     
-    // عرض النتائج
     showResults(score, percentage, timeTaken);
 }
 
@@ -347,12 +309,6 @@ function calculateScore() {
     }
     
     return score;
-}
-
-function saveStudentResultLocally(studentData) {
-    const students = JSON.parse(localStorage.getItem('students')) || [];
-    students.push(studentData);
-    localStorage.setItem('students', JSON.stringify(students));
 }
 
 function showResults(score, percentage, timeTaken) {
@@ -372,7 +328,6 @@ function showResults(score, percentage, timeTaken) {
         <p class="time-taken">الوقت المستغرق: ${timeTaken}</p>
     `;
     
-    // إذا كان الإعداد يسمح بعرض الإجابات
     if (settings.resultsDisplay === 'show-answers') {
         resultsHTML += `
             <div class="questions-review">
@@ -380,8 +335,6 @@ function showResults(score, percentage, timeTaken) {
                 ${questions.map((question, index) => {
                     const studentAnswer = studentAnswers[index];
                     const isCorrect = studentAnswer === question.correctAnswer;
-                    const correctAnswerText = question.options[question.correctAnswer - 1];
-                    const studentAnswerText = studentAnswer ? question.options[studentAnswer - 1] : 'لم تجب';
                     
                     return `
                         <div class="question-feedback ${isCorrect ? 'correct' : 'incorrect'}">
@@ -393,8 +346,8 @@ function showResults(score, percentage, timeTaken) {
                                 </div>
                             ` : ''}
                             <p><strong>النص:</strong> ${question.text}</p>
-                            <p><strong>إجابتك:</strong> ${studentAnswerText}</p>
-                            <p><strong>الإجابة الصحيحة:</strong> ${correctAnswerText}</p>
+                            <p><strong>إجابتك:</strong> ${studentAnswer ? question.options[studentAnswer - 1] : 'لم تجب'}</p>
+                            <p><strong>الإجابة الصحيحة:</strong> ${question.options[question.correctAnswer - 1]}</p>
                             <p class="result ${isCorrect ? 'correct-text' : 'incorrect-text'}">
                                 ${isCorrect ? '✓ إجابة صحيحة' : '✗ إجابة خاطئة'}
                             </p>
@@ -407,7 +360,6 @@ function showResults(score, percentage, timeTaken) {
     
     resultsHTML += `
         <button class="btn-primary" onclick="location.reload()">إعادة الاختبار</button>
-        <button class="btn-secondary" onclick="showLoginInterface()" style="margin-top: 10px;">العودة للصفحة الرئيسية</button>
     `;
     
     resultsDiv.innerHTML = resultsHTML;
@@ -415,55 +367,17 @@ function showResults(score, percentage, timeTaken) {
 }
 
 function isYouTubeUrl(url) {
-    if (!url) return false;
     return url.includes('youtube.com') || url.includes('youtu.be');
 }
 
 function getYouTubeEmbedUrl(url) {
-    if (!url) return '';
     const videoId = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
     return videoId ? `https://www.youtube.com/embed/${videoId[1]}` : url;
 }
 
-// دوال مساعدة للتحميل من localStorage (للنسخ الاحتياطي)
-function loadQuestionsFromLocalStorage() {
-    return JSON.parse(localStorage.getItem('questions')) || [];
-}
-
-function loadSettingsFromLocalStorage() {
-    const localSettings = JSON.parse(localStorage.getItem('settings'));
-    if (localSettings) {
-        settings = localSettings;
-    } else {
-        settings = {
-            questionsCount: 10,
-            loginType: 'open',
-            attemptsCount: 1,
-            resultsDisplay: 'show-answers'
-        };
-    }
-    return settings;
-}
-
-function loadAuthorizedStudentsFromLocalStorage() {
-    return JSON.parse(localStorage.getItem('authorizedStudents')) || [];
-}
-
-// دالة للتحقق من اتصال Supabase
-async function checkSupabaseConnection() {
-    try {
-        const { data, error } = await supabase.from('questions').select('count').limit(1);
-        return !error;
-    } catch (error) {
-        console.error('Supabase connection error:', error);
-        return false;
-    }
-}
-
-// إضافة مستمع حدث للخروج من الصفحة
-window.addEventListener('beforeunload', function(e) {
-    if (document.getElementById('test-container').style.display !== 'none') {
-        e.preventDefault();
-        e.returnValue = 'هل أنت متأكد من أنك تريد المغادرة؟ قد تفقد تقدمك في الاختبار.';
-    }
-});
+// جعل الدوال متاحة globally
+window.validateRestrictedLogin = validateRestrictedLogin;
+window.startTest = startTest;
+window.previousQuestion = previousQuestion;
+window.nextQuestion = nextQuestion;
+window.submitTest = submitTest;
