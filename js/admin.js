@@ -92,26 +92,7 @@ function setupEventListeners() {
 
     // تغيير نوع السؤال
     document.getElementById('question-type').addEventListener('change', function() {
-        const type = this.value;
-        const mediaGroup = document.getElementById('media-url-group');
-        const readingGroup = document.getElementById('reading-passage-group');
-        const readingQuestionsContainer = document.getElementById('reading-questions-container');
-        const standardOptionsSection = document.getElementById('standard-options-section');
-        const standardQuestionGroup = document.getElementById('standard-question-group');
-        
-        // إظهار/إخفاء العناصر حسب نوع السؤال
-        mediaGroup.style.display = type === 'multiple-with-media' ? 'block' : 'none';
-        readingGroup.style.display = type === 'reading-comprehension' ? 'block' : 'none';
-        readingQuestionsContainer.style.display = type === 'reading-comprehension' ? 'block' : 'none';
-        standardOptionsSection.style.display = type === 'reading-comprehension' ? 'none' : 'block';
-        standardQuestionGroup.style.display = type === 'reading-comprehension' ? 'none' : 'block';
-        
-        if (type === 'reading-comprehension') {
-            readingQuestions = [];
-            loadReadingQuestions();
-        } else {
-            updateOptionsContainer();
-        }
+        handleQuestionTypeChange(this.value);
     });
 
     // تغيير عدد الخيارات
@@ -121,7 +102,10 @@ function setupEventListeners() {
     document.getElementById('add-reading-question').addEventListener('click', addReadingQuestion);
 
     // إضافة سؤال جديد
-    document.getElementById('add-question-form').addEventListener('submit', addQuestion);
+    document.getElementById('add-question-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        addQuestion(e);
+    });
 
     // حفظ الإعدادات
     document.getElementById('save-settings').addEventListener('click', saveSettings);
@@ -146,10 +130,37 @@ function setupEventListeners() {
     document.getElementById('select-all-students').addEventListener('change', toggleSelectAllStudents);
     document.getElementById('print-report').addEventListener('click', printReport);
     document.getElementById('print-authorized-students').addEventListener('click', printAuthorizedStudents);
+
+    // تهيئة الحاوية عند التحميل
+    updateOptionsContainer();
+}
+
+function handleQuestionTypeChange(type) {
+    const mediaGroup = document.getElementById('media-url-group');
+    const readingGroup = document.getElementById('reading-passage-group');
+    const readingQuestionsContainer = document.getElementById('reading-questions-container');
+    const standardOptionsSection = document.getElementById('standard-options-section');
+    const standardQuestionGroup = document.getElementById('standard-question-group');
+    
+    // إظهار/إخفاء العناصر حسب نوع السؤال
+    mediaGroup.style.display = type === 'multiple-with-media' ? 'block' : 'none';
+    readingGroup.style.display = type === 'reading-comprehension' ? 'block' : 'none';
+    readingQuestionsContainer.style.display = type === 'reading-comprehension' ? 'block' : 'none';
+    standardOptionsSection.style.display = type === 'reading-comprehension' ? 'none' : 'block';
+    standardQuestionGroup.style.display = type === 'reading-comprehension' ? 'none' : 'block';
+    
+    if (type === 'reading-comprehension') {
+        readingQuestions = [];
+        loadReadingQuestions();
+    }
 }
 
 function addSyncButton() {
+    // التحقق إذا كان الزر موجوداً مسبقاً
+    if (document.getElementById('sync-button')) return;
+    
     const syncButton = document.createElement('button');
+    syncButton.id = 'sync-button';
     syncButton.textContent = '🔄 مزامنة مع السحابة';
     syncButton.className = 'btn-primary';
     syncButton.style.marginRight = '10px';
@@ -248,6 +259,8 @@ function addReadingQuestion() {
 
 function updateReadingQuestionOptions(questionId) {
     const questionDiv = document.querySelector(`.reading-question-container[data-id="${questionId}"]`);
+    if (!questionDiv) return;
+    
     const optionsCount = parseInt(questionDiv.querySelector('.reading-options-count').value);
     const optionsContainer = questionDiv.querySelector('.reading-options-container');
     const correctAnswerContainer = questionDiv.querySelector('.reading-correct-answer-container');
@@ -289,15 +302,20 @@ function loadReadingQuestions() {
 async function addQuestion(e) {
     e.preventDefault();
     
-    const questionText = document.getElementById('question-text').value;
+    const questionText = document.getElementById('question-text').value.trim();
     const questionType = document.getElementById('question-type').value;
+    
+    if (!questionText) {
+        alert('يرجى إدخال نص السؤال');
+        return;
+    }
     
     let question;
     
     if (questionType === 'reading-comprehension') {
-        const readingPassage = document.getElementById('reading-passage').value;
+        const readingPassage = document.getElementById('reading-passage').value.trim();
         
-        if (!readingPassage.trim()) {
+        if (!readingPassage) {
             alert('يرجى إدخال قطعة الاستيعاب');
             return;
         }
@@ -310,28 +328,32 @@ async function addQuestion(e) {
         }
         
         const passageQuestions = [];
+        let hasErrors = false;
         
         readingQuestionElements.forEach(questionDiv => {
             const questionId = questionDiv.getAttribute('data-id');
-            const questionText = questionDiv.querySelector('.reading-question-text').value;
+            const qText = questionDiv.querySelector('.reading-question-text').value.trim();
             const optionsCount = parseInt(questionDiv.querySelector('.reading-options-count').value);
             const correctAnswer = questionDiv.querySelector(`input[name="reading-correct-${questionId}"]:checked`);
             
-            if (!questionText.trim()) {
+            if (!qText) {
                 alert('يرجى إدخال نص جميع الأسئلة');
+                hasErrors = true;
                 return;
             }
             
             if (!correctAnswer) {
                 alert('يرجى اختيار الإجابة الصحيحة لجميع الأسئلة');
+                hasErrors = true;
                 return;
             }
             
             const options = [];
             for (let i = 1; i <= optionsCount; i++) {
                 const optionInput = questionDiv.querySelector(`.reading-option-input[data-option="${i}"]`);
-                if (!optionInput.value.trim()) {
+                if (!optionInput || !optionInput.value.trim()) {
                     alert(`يرجى إدخال نص جميع الخيارات`);
+                    hasErrors = true;
                     return;
                 }
                 options.push(optionInput.value);
@@ -339,11 +361,13 @@ async function addQuestion(e) {
             
             passageQuestions.push({
                 id: questionId,
-                text: questionText,
+                text: qText,
                 options: options,
                 correctAnswer: parseInt(correctAnswer.value)
             });
         });
+        
+        if (hasErrors) return;
         
         question = {
             id: Date.now(),
@@ -364,14 +388,19 @@ async function addQuestion(e) {
         }
         
         const options = [];
+        let hasErrors = false;
+        
         for (let i = 1; i <= optionsCount; i++) {
             const optionInput = document.querySelector(`.option-input[data-option="${i}"]`);
-            if (optionInput.value.trim() === '') {
+            if (!optionInput || optionInput.value.trim() === '') {
                 alert(`يرجى إدخال نص الخيار ${i}`);
-                return;
+                hasErrors = true;
+                break;
             }
             options.push(optionInput.value);
         }
+        
+        if (hasErrors) return;
         
         question = {
             id: Date.now(),
@@ -379,25 +408,39 @@ async function addQuestion(e) {
             type: questionType,
             options: options,
             correctAnswer: parseInt(correctAnswer.value),
-            mediaUrl: questionType === 'multiple-with-media' ? document.getElementById('media-url').value : null
+            mediaUrl: questionType === 'multiple-with-media' ? document.getElementById('media-url').value.trim() : null
         };
     }
     
+    // إضافة السؤال إلى المصفوفة
     questions.push(question);
+    
+    // حفظ الأسئلة
     await saveQuestions();
+    
+    // إعادة تحميل قائمة الأسئلة
     await loadQuestions();
     
     // إعادة تعيين النموذج
+    resetQuestionForm();
+    
+    alert('تم إضافة السؤال بنجاح');
+}
+
+function resetQuestionForm() {
     document.getElementById('add-question-form').reset();
     document.getElementById('media-url-group').style.display = 'none';
     document.getElementById('reading-passage-group').style.display = 'none';
     document.getElementById('reading-questions-container').style.display = 'none';
     document.getElementById('standard-options-section').style.display = 'block';
     document.getElementById('standard-question-group').style.display = 'block';
+    
+    // إعادة تعيين نوع السؤال إلى الافتراضي
+    document.getElementById('question-type').value = 'multiple';
+    
+    // تحديث الحاوية
     updateOptionsContainer();
     loadReadingQuestions();
-    
-    alert('تم إضافة السؤال بنجاح');
 }
 
 async function saveQuestions() {
@@ -407,9 +450,12 @@ async function saveQuestions() {
             if (!question.supabase_id) {
                 try {
                     const savedQuestion = await supabaseService.addQuestion(question);
-                    question.supabase_id = savedQuestion.id;
+                    if (savedQuestion) {
+                        question.supabase_id = savedQuestion.id;
+                    }
                 } catch (error) {
                     console.error('Error saving question to Supabase:', error);
+                    // نستمر في المحاولة مع الأسئلة الأخرى
                 }
             }
         }
@@ -424,7 +470,7 @@ function loadQuestions() {
     container.innerHTML = '';
     
     if (questions.length === 0) {
-        container.innerHTML = '<p>لا توجد أسئلة مضافة بعد</p>';
+        container.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">لا توجد أسئلة مضافة بعد</p>';
         return;
     }
     
@@ -439,7 +485,7 @@ function loadQuestions() {
         
         if (question.type === 'reading-comprehension') {
             questionHTML += `
-                <p><strong>قطعة الاستيعاب:</strong> ${question.readingPassage.substring(0, 100)}...</p>
+                <p><strong>قطعة الاستيعاب:</strong> ${question.readingPassage.substring(0, 100)}${question.readingPassage.length > 100 ? '...' : ''}</p>
                 <p><strong>عدد الأسئلة:</strong> ${question.passageQuestions.length}</p>
                 <div class="passage-questions">
                     ${question.passageQuestions.map((q, qIndex) => `
@@ -498,6 +544,8 @@ async function deleteQuestion(id) {
         questions = questions.filter(q => q.id !== id);
         await saveQuestions();
         await loadQuestions();
+        
+        alert('تم حذف السؤال بنجاح');
     }
 }
 
@@ -505,16 +553,21 @@ async function loadReports() {
     let students = [];
     
     if (useSupabase) {
-        students = await supabaseService.getStudentsResults();
-        // تحويل البيانات من Supabase
-        students = students.map(item => ({
-            name: item.name,
-            score: item.score,
-            total: item.total,
-            percentage: item.percentage,
-            timeTaken: item.time_taken,
-            date: item.date
-        }));
+        try {
+            students = await supabaseService.getStudentsResults();
+            // تحويل البيانات من Supabase
+            students = students.map(item => ({
+                name: item.name,
+                score: item.score,
+                total: item.total,
+                percentage: item.percentage,
+                timeTaken: item.time_taken,
+                date: item.date
+            }));
+        } catch (error) {
+            console.error('Error loading reports from Supabase:', error);
+            students = JSON.parse(localStorage.getItem('students')) || [];
+        }
     } else {
         students = JSON.parse(localStorage.getItem('students')) || [];
     }
@@ -552,6 +605,11 @@ async function loadReports() {
 function showTopStudents() {
     const count = parseInt(document.getElementById('top-students-count').value);
     const students = JSON.parse(localStorage.getItem('students')) || [];
+    
+    if (students.length === 0) {
+        alert('لا توجد بيانات للطلاب');
+        return;
+    }
     
     const topStudents = students
         .sort((a, b) => b.percentage - a.percentage)
@@ -597,6 +655,7 @@ async function deleteSelectedStudents() {
         if (useSupabase) {
             try {
                 // في حالة Supabase، نحتاج إلى معرفات السحابة للحذف
+                // هذا تنفيذ مبسط - يمكن تحسينه لاحقاً
                 await supabaseService.deleteStudentResults();
             } catch (error) {
                 console.error('Error deleting students from Supabase:', error);
@@ -646,9 +705,9 @@ function loadSettings() {
 
 async function saveSettings() {
     settings = {
-        questionsCount: parseInt(document.getElementById('questions-count').value),
+        questionsCount: parseInt(document.getElementById('questions-count').value) || 10,
         loginType: document.getElementById('login-type').value,
-        attemptsCount: parseInt(document.getElementById('attempts-count').value),
+        attemptsCount: parseInt(document.getElementById('attempts-count').value) || 1,
         resultsDisplay: document.getElementById('results-display').value
     };
     
@@ -669,6 +728,11 @@ async function saveSettings() {
 function loadAuthorizedStudents() {
     const tbody = document.querySelector('#authorized-students-list tbody');
     tbody.innerHTML = '';
+    
+    if (authorizedStudents.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">لا توجد بيانات</td></tr>';
+        return;
+    }
     
     authorizedStudents.forEach((student, index) => {
         const tr = document.createElement('tr');
@@ -708,7 +772,9 @@ async function addAuthorizedStudent() {
     if (useSupabase) {
         try {
             const savedStudent = await supabaseService.addAuthorizedStudent(newStudent);
-            newStudent.supabase_id = savedStudent.id;
+            if (savedStudent) {
+                newStudent.supabase_id = savedStudent.id;
+            }
         } catch (error) {
             console.error('Error adding authorized student to Supabase:', error);
         }
@@ -740,6 +806,8 @@ async function deleteAuthorizedStudent(index) {
         authorizedStudents.splice(index, 1);
         await saveAuthorizedStudents();
         await loadAuthorizedStudents();
+        
+        alert('تم حذف الطالب بنجاح');
     }
 }
 
@@ -775,7 +843,13 @@ function printAuthorizedStudents() {
     printWindow.print();
 }
 
-// تحديث الحاوية عند التحميل
-document.addEventListener('DOMContentLoaded', function() {
-    updateOptionsContainer();
-});
+// دالة للتحقق من اتصال Supabase
+async function checkSupabaseConnection() {
+    try {
+        const { data, error } = await supabase.from('questions').select('count').limit(1);
+        return !error;
+    } catch (error) {
+        console.error('Supabase connection error:', error);
+        return false;
+    }
+}
