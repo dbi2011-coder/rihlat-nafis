@@ -279,18 +279,21 @@ async function submitTest() {
         total: questions.length,
         percentage: percentage,
         time_taken: timeTaken,
-        date: new Date().toLocaleDateString('ar-SA')
+        date: new Date().toLocaleDateString('ar-SA'),
+        created_at: new Date().toISOString()
     };
     
     try {
-        const { error } = await supabaseClient
+        const { data, error } = await supabaseClient
             .from('students')
             .insert([studentResult]);
         
         if (error) throw error;
         
+        console.log('✅ تم حفظ نتيجة الطالب في Supabase');
+        
     } catch (error) {
-        console.error('Error saving to Supabase, using localStorage:', error);
+        console.error('❌ Error saving to Supabase, using localStorage:', error);
         const students = JSON.parse(localStorage.getItem('students')) || [];
         students.push(studentResult);
         localStorage.setItem('students', JSON.stringify(students));
